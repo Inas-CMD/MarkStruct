@@ -1,6 +1,7 @@
 ﻿#include <fstream>
 #include <string>
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
@@ -45,13 +46,12 @@ private:
     bool openBlackquote = false;
     bool codeblockopen = false;
     bool ignore = false;
-    bool footnoteOpen = false;
-
     string newline;
 
-public:
+    vector<pair<string, string>> footnotes;
 
-    void checkCloseList(int type, bool lionly = false, bool ft = false) {
+public:
+    void checkCloseList(int type, bool lionly = false) {
         if (openBlackquote == true) {
             newline = "</blockquote>\n" + newline;
             openBlackquote = false;
@@ -60,12 +60,6 @@ public:
             newline = "</li>\n" + newline;
             listitem_open = false;
         }
-
-        if (footnoteOpen == true) {
-            newline = "</ol>\n" + newline;
-            footnoteOpen = false;
-        }
-
         if (unordered_sublist_open == true && type != 2 && !lionly) {
             checkCloseList(0, true);
             newline = "</ul>\n" + newline;
@@ -104,17 +98,25 @@ public:
             ordered_sublist_open = false;
         }
         if (unordered_list_open == true && type != 1) {
-            finaltext += "</ul>\n";
+            newline = "</li></ul>\n" + newline;
             unordered_list_open = false;
+            listitem_open = false;
         }
         if (ordered_list_open == true && type != 1) {
-            finaltext += "</ol>\n";
+            listitem_open = false;
+            newline = "</li></ol>\n" + newline;
             ordered_list_open = false;
         }
-        if (footnoteOpen) {
+
+
+        if (!footnotes.empty()) {
+            finaltext += "\n<ol>\n";
+            for (const auto& fn : footnotes) {
+                finaltext += "  <li id=\"fn" + fn.first + "\">" + fn.second + " <a href=\"#fnref" + fn.first + "\">↩</a></li>\n";
+            }
             finaltext += "</ol>\n";
-            footnoteOpen = false;
         }
+
         return finaltext;
     }
 
@@ -141,7 +143,7 @@ public:
                     else {
                         counter--;
                     }
-                    templine += c;
+                    templine = templine + c;
                 }
             }
             else {
@@ -201,6 +203,7 @@ public:
         }
 
         line.erase(0, headernum + 1);
+
         newline = "<h" + to_string(headernum) + ">" + line + "</h" + to_string(headernum) + ">";
     }
 
@@ -210,18 +213,17 @@ public:
         string link = "";
         string title = "";
         string code = "";
-        string footnote = "";
         bool isImage = false;
         bool isFootnote = false;
         bool wasTriggered = false;
         bool isCode = false;
-        bool isFootnoteDeclaration = false;
-        bool isTask = false;
         int i = 0;
         bool linkc[3] = { false, false, false };
+        bool previousWasOpenBracket = false;
+        string currentFootnoteId;
 
-        for (char c : line) {
-            i++;
+        for (i = 0; i < line.length(); i++) {
+            char c = line[i];
             switch (c) {
             case '!':
                 wasTriggered = true;
@@ -230,91 +232,64 @@ public:
             case '[':
                 wasTriggered = true;
                 linkc[0] = true;
+                previousWasOpenBracket = true;
                 break;
             case ']':
                 linkc[0] = false;
-                if (linkText == "x" || linkText == " " || linkText == "X") {
-                    isTask = true;
-                    if (linkText = " ") {
-                        newline += "<input type=\"checkbox\"> ";
-                    }
-                    else if (linkText == "X" || linkText == "x") {
-                        newline += "<input type=\"checkbox\" checked>";
-                    }
-                }
-                if (isFootnote && line[1] != '^') {
-                    newline += "<sup id=\"fnref" + linkText + "\"><a href=\"#fn" + linkText + "\">" + linkText + "</a></sup>";
+                if (isFootnote) {
+                    newline += "<sup id=\"fnref" + currentFootnoteId + "\"><a href=\"#fn" + currentFootnoteId + "\">" + currentFootnoteId + "</a></sup>";
+                    isFootnote = false;
                 }
                 break;
             case '(':
                 linkc[1] = true;
                 break;
             case '^':
-                if (linkc[0]) {
+                if (previousWasOpenBracket) {
                     isFootnote = true;
+                    currentFootnoteId = "";
+                    while (++i < line.length()) {
+                        char nextChar = line[i];
+                        if (nextChar == ']') {
+                            i--;
+                            break;
+                        }
+                        currentFootnoteId += nextChar;
+                    }
                 }
                 break;
             case ')':
                 linkc[1] = false;
-                if (link.back() == ' ') {
+                if (!link.empty() && link.back() == ' ') {
                     link.pop_back();
                 }
-                if (isImage && wasTriggered && !isFootnote) {
+                if (isImage && wasTriggered) {
                     newline += "<img src=\"" + link + "\" alt=\"" + linkText + "\" title=\"" + title + "\">";
                 }
-                else if (wasTriggered && !isFootnote) {
+                else if (wasTriggered) {
                     newline += "<a href=\"" + link + "\" title=\"" + title + "\">" + linkText + "</a>";
                 }
-                isImage = false;
-                wasTriggered = false;
                 break;
             case '"':
                 linkc[2] = !linkc[2];
                 break;
-            case ':':
-                if (isFootnote) {
-                    isFootnoteDeclaration = true;
-                }
-                break;
             case '`':
                 if (!codeblockopen) {
                     isCode = !isCode;
-                    wasTriggered = true;
-                    if (!isCode && wasTriggered) {
+                    if (!isCode) {
                         newline += "<code>" + code + "</code>";
                         code.clear();
                     }
                 }
                 break;
             default:
-                if (linkc[0] && !isFootnoteDeclaration) {
-                    linkText += c;
-                }
-                else if (linkc[1] && !linkc[2] && !isFootnoteDeclaration) {
-                    link += c;
-                }
-                else if (linkc[2]) {
-                    title += c;
-                }
-                else if (isCode) {
-                    code += c;
-                }
-                else if (isFootnoteDeclaration) {
-                    footnote += c;
-                }
-                else {
-                    newline += c;
-                }
-                break;
+                if (linkc[0] && !isFootnote) linkText += c;
+                else if (linkc[1] && !linkc[2]) link += c;
+                else if (linkc[2]) title += c;
+                else if (isCode) code += c;
+                else newline += c;
             }
-        }
-
-        if (isFootnoteDeclaration) {
-            if (!footnoteOpen) {
-                newline += "<ol id=\"footnotes\">\n";
-                footnoteOpen = true;
-            }
-            newline += "<li id=\"fn" + linkText + "\">" + footnote + " <a href=\"#fnref" + linkText + "\">↩</a></li>\n";
+            previousWasOpenBracket = (c == '[');
         }
     }
 
@@ -322,20 +297,20 @@ public:
         if (line.empty()) {
             if (paragraph_open) {
                 paragraph_open = false;
-                newline += "</p>";
+                newline = newline + "</p>";
             }
         }
         else {
-            if (!paragraph_open) {
+            if (paragraph_open == false) {
                 paragraph_open = true;
                 newline = "<p>";
             }
-            newline += line;
+            newline = newline + line;
         }
     }
 
     void processUnList(string line) {
-        if (!unordered_list_open) {
+        if (unordered_list_open == false) {
             newline = "<ul>\n";
             unordered_list_open = true;
         }
@@ -344,22 +319,22 @@ public:
             checkCloseList(1);
         }
         line.erase(0, 2);
-        newline += "<li>" + line;
+        newline = newline + "<li>" + line;
         listitem_open = true;
     }
 
     void processUnSublist(string line) {
-        if (!unordered_sublist_open) {
-            newline += "<ul>\n";
+        if (unordered_sublist_open == false) {
+            newline = newline + "<ul>\n";
             unordered_sublist_open = true;
         }
         line.erase(0, 4);
-        newline += "<li>" + line + "</li>";
+        newline = newline + "<li>" + line + "</li>";
     }
 
     void processOList(string line) {
         checkCloseList(0, true);
-        if (!ordered_list_open) {
+        if (ordered_list_open == false) {
             newline = "<ol>\n";
             ordered_list_open = true;
         }
@@ -368,35 +343,52 @@ public:
             checkCloseList(1);
         }
         line.erase(0, 2);
-        newline += "<li>" + line;
+        newline = newline + "<li>" + line;
         listitem_open = true;
     }
 
     void processOSublist(string line) {
-        if (!ordered_sublist_open) {
-            newline += "<ol>\n";
+        if (ordered_sublist_open == false) {
+            newline = newline + "<ol>\n";
             ordered_sublist_open = true;
         }
         line.erase(0, 5);
-        newline += "<li>" + line + "</li>";
+        newline = newline + "<li>" + line + "</li>";
     }
 
     void processBlockquote(string line) {
         int BCount = 0;
+        bool brakeloop = false;
         for (char c : line) {
-            if (c == '>') BCount++;
-            else break;
+            switch (c) {
+            case '>':
+                BCount++;
+                break;
+            default:
+                brakeloop = true;
+            }
+            if (brakeloop) {
+                break;
+            }
         }
-        line.erase(0, BCount + 1);
-        if (BCount == 1) {
-            if (openBlackquote) {
+        switch (BCount) {
+        case 0:
+            break;
+        case 1:
+            if (openBlackquote == true) {
                 checkCloseList(0, true);
             }
             openBlackquote = true;
+            line.erase(0, 2);
             newline = "<blockquote>" + line;
-        }
-        else if (BCount == 2) {
+            break;
+
+        case 2:
+            line.erase(0, 3);
             newline = "<blockquote>" + line + "</blockquote>";
+            break;
+        default:
+            break;
         }
     }
 
@@ -405,100 +397,103 @@ public:
     }
 
     void processCodeBlock(string line) {
-        codeblockopen = !codeblockopen;
-        if (codeblockopen) {
+        if (codeblockopen == false) {
+            codeblockopen = true;
             newline = "<pre><code>";
         }
-        else {
+        else if (codeblockopen == true) {
+            codeblockopen = false;
             newline = "</code></pre>";
         }
     }
 
     string processline(string line) {
-        newline = "";
-        if (line.empty()) {
-            processParagraph(line);
-            return newline + "\n";
+        if (line.find("[^") == 0 && line.find("]:") != string::npos) {
+            size_t colonPos = line.find("]:");
+            string id = line.substr(2, colonPos - 2);
+            string content = line.substr(colonPos + 3);
+            footnotes.push_back(make_pair(id, content));
+            return "";
         }
 
+        newline = "";
         char infocus = line[0];
-        bool processed = false;
 
         if (isdigit(infocus) && line[1] == '.') {
-            checkCloseList(0, true)
-            processOList(line);
-            processed = true;
+            this->processOList(line);
         }
         else {
             switch (infocus) {
             case '#':
-                processHeader(line);
-                checkCloseList(3);
-                processed = true;
+                this->processHeader(line);
+                this->checkCloseList(3);
                 break;
+
             case '*':
+                if (line[1] == '*' && line[2] == '*') {
+                    processHorizontalRule();
+                    break;
+                }
             case '+':
             case '-':
-                if (line.size() > 1 && line[1] == ' ') {
-                    processUnList(line);
-                    processed = true;
+                if (line[1] == ' ') {
+                    this->processUnList(line);
                 }
-                else if (line.substr(0, 3) == "---" || line.substr(0, 3) == "***") {
-                    processHorizontalRule();
-                    processed = true;
+                else if (line[1] == '-' && line[2] == '-') {
+                    this->processHorizontalRule();
                 }
                 break;
+
             case ' ':
-                if (line.size() > 3 && (line[2] == '-' || line[2] == '+' || line[2] == '*')) {
-                    processUnSublist(line);
-                    processed = true;
+                if (unordered_list_open == true) {
+                    if (line[2] == '-' || line[2] == '+' || line[2] == '*') {
+                        this->processUnSublist(line);
+                    }
                 }
-                else if (line.size() > 4 && isdigit(line[3]) && line[4] == '.') {
-                    processOSublist(line);
-                    processed = true;
+                else if (isdigit(line[3]) && line[4] == '.') {
+                    this->processOSublist(line);
                 }
                 break;
+
             case '[':
-                processRemainingMarkdown(line);
-                processed = true;
+                this->processRemainingMarkdown(line);
                 break;
+
             case '>':
-                processBlockquote(line);
-                processed = true;
+                this->processBlockquote(line);
                 break;
+
             case '~':
             case '`':
-                if (line.size() > 1 && (line[1] == '`' || line[1] == '~')) {
-                    processCodeBlock(line);
-                    processed = true;
+                if (line[1] == '`' || line[1] == '~') {
+                    this->processCodeBlock(line);
                 }
                 break;
+
             case '_':
-                if (line.substr(0, 3) == "___") {
-                    processHorizontalRule();
-                    processed = true;
-                }
+                if (line[1] == '_' && line[2] == '_')
+                    this->processHorizontalRule();
                 break;
+            case '\\':
+                break;
+
             default:
+                this->processParagraph(line);
+                this->checkCloseList(3);
                 break;
             }
         }
-
-        if (!processed) {
-            processParagraph(line);
-            checkCloseList(3);
-        }
-
-        newline = TextStyle(newline);
-        processRemainingMarkdown(newline);
-        return newline + "\n";
+        newline = this->TextStyle(newline);
+        this->processRemainingMarkdown(newline);
+        newline = newline + "\n";
+        return newline;
     }
 };
 
 int main() {
     string filepath = "C:/test/test.txt";
     string line;
-    fstream mfile(filepath);
+    ifstream mfile(filepath);
     markdownInterpreter i;
     ErrorCorrector ecc;
     string tempfile = "";
