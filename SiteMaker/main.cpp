@@ -46,6 +46,7 @@ private:
     bool codeblockopen = false;
     bool ignore = false;
     bool footnoteOpen = false;
+
     string newline;
 
 public:
@@ -215,6 +216,7 @@ public:
         bool wasTriggered = false;
         bool isCode = false;
         bool isFootnoteDeclaration = false;
+        bool isTask = false;
         int i = 0;
         bool linkc[3] = { false, false, false };
 
@@ -231,6 +233,15 @@ public:
                 break;
             case ']':
                 linkc[0] = false;
+                if (linkText == "x" || linkText == " " || linkText == "X") {
+                    isTask = true;
+                    if (linkText = " ") {
+                        newline += "<input type=\"checkbox\"> ";
+                    }
+                    else if (linkText == "X" || linkText == "x") {
+                        newline += "<input type=\"checkbox\" checked>";
+                    }
+                }
                 if (isFootnote && line[1] != '^') {
                     newline += "<sup id=\"fnref" + linkText + "\"><a href=\"#fn" + linkText + "\">" + linkText + "</a></sup>";
                 }
