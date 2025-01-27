@@ -8,18 +8,18 @@ class ErrorCorrector {
 private:
     string code = "";
 public:
-    void removeExtraLi(std::string& str) {
-        std::string patternOl = "</ol>\n</li>";
-        std::string patternUl = "</li></ul>\n</li>";
+    void removeExtraLi(string& str) {
+        string patternOl = "</ol>\n</li>";
+        string patternUl = "</li></ul>\n</li>";
 
         size_t posOl = 0;
-        while ((posOl = str.find(patternOl, posOl)) != std::string::npos) {
+        while ((posOl = str.find(patternOl, posOl)) != string::npos) {
             str.erase(posOl + 6, 5);
             posOl += 6;
         }
 
         size_t posUl = 0;
-        while ((posUl = str.find(patternUl, posUl)) != std::string::npos) {
+        while ((posUl = str.find(patternUl, posUl)) != string::npos) {
             str.erase(posUl + 11, 5);
             posUl += 11;
         }
@@ -29,7 +29,6 @@ public:
     }
     string checkCode() {
         this->removeExtraLi(code);
-
         return code;
     }
 };
@@ -46,99 +45,94 @@ private:
     bool openBlackquote = false;
     bool codeblockopen = false;
     bool ignore = false;
+    bool footnoteOpen = false;
     string newline;
+    string footnoteText;
+    string footnoteLabel;
 
 public:
-
     void checkCloseList(int type, bool lionly = false) {
-        if (openBlackquote == true) {
+        if (openBlackquote) {
             newline = "</blockquote>\n" + newline;
             openBlackquote = false;
         }
-        if (listitem_open == true) {
+        if (listitem_open) {
             newline = "</li>\n" + newline;
             listitem_open = false;
         }
-        if (unordered_sublist_open == true && type != 2 && !lionly) {
+
+        if (footnoteOpen) {
+            newline = "</ol>\n" + newline;
+            footnoteOpen = false;
+        }
+
+        if (unordered_sublist_open && type != 2 && !lionly) {
             checkCloseList(0, true);
             newline = "</ul>\n" + newline;
             unordered_sublist_open = false;
         }
-        if (ordered_sublist_open == true && type != 2 && !lionly) {
+        if (ordered_sublist_open && type != 2 && !lionly) {
             checkCloseList(0, true);
             newline = "</ol>\n" + newline;
             ordered_sublist_open = false;
         }
-        if (unordered_list_open == true && type != 1 && !lionly) {
-
+        if (unordered_list_open && type != 1 && !lionly) {
             newline = "</li></ul>\n" + newline;
             unordered_list_open = false;
             listitem_open = false;
         }
-        if (ordered_list_open == true && type != 1 && !lionly) {
-
+        if (ordered_list_open && type != 1 && !lionly) {
             listitem_open = false;
             newline = "</li></ol>\n" + newline;
             ordered_list_open = false;
         }
     }
 
-    string finalCloseList(string finaltext, int type = 3) {
+    string finalCloseList(string finaltext) {
         if (paragraph_open) {
             paragraph_open = false;
             finaltext += "</p>";
         }
-        if (unordered_sublist_open == true && type != 2) {
-            checkCloseList(0, true);
+        if (unordered_sublist_open) {
             finaltext += "</ul>\n";
             unordered_sublist_open = false;
         }
-        if (ordered_sublist_open == true && type != 2) {
-            checkCloseList(0, true);
+        if (ordered_sublist_open) {
+            finaltext += "</ol>\n";
+            ordered_sublist_open = false;
+        }
+        if (unordered_list_open) {
+            finaltext += "</ul>\n";
+            unordered_list_open = false;
+        }
+        if (ordered_list_open) {
             finaltext += "</ol>\n";
             ordered_list_open = false;
         }
-        if (unordered_list_open == true && type != 1) {
-
-            newline = "</li></ul>\n" + newline;
-            unordered_list_open = false;
-            listitem_open = false;
-        }
-        if (ordered_list_open == true && type != 1) {
-
-            listitem_open = false;
-            newline = "</li></ol>\n" + newline;
-            ordered_list_open = false;
+        if (footnoteOpen) {
+            finaltext += "</ol>\n";
+            footnoteOpen = false;
         }
         return finaltext;
     }
 
     string TextStyle(string line) {
-
-        bool isActive = false;
-        string templine = "";
         int stylenum = 0;
-        int counter = 0;
+        string templine;
+        bool escape = false;
 
-        for (char c : line) {
-            if (c == '\\') {
-                ignore = true;
-                counter = 1;
+        for (size_t i = 0; i < line.size(); i++) {
+            if (escape) {
+                templine += line[i];
+                escape = false;
+                continue;
             }
-
-            if (c == '*') {
-                if (!ignore) {
-                    stylenum++;
-                }
-                else {
-                    if (counter <= 0) {
-                        ignore = false;
-                    }
-                    else {
-                        counter--;
-                    }
-                    templine = templine + c;
-                }
+            if (line[i] == '\\') {
+                escape = true;
+                continue;
+            }
+            if (line[i] == '*') {
+                stylenum++;
             }
             else {
                 if (stylenum > 0) {
@@ -163,132 +157,81 @@ public:
                         }
                     }
                     else if (stylenum == 3) {
-                        if (!styleopen[1] && !styleopen[0]) {
+                        if (!styleopen[0] && !styleopen[1]) {
                             templine += "<strong><em>";
-                            styleopen[0] = true;
-                            styleopen[1] = true;
+                            styleopen[0] = styleopen[1] = true;
                         }
-                        else if (styleopen[0] && styleopen[1]) {
+                        else {
                             templine += "</em></strong>";
-                            styleopen[0] = false;
-                            styleopen[1] = false;
+                            styleopen[0] = styleopen[1] = false;
                         }
                     }
                     stylenum = 0;
                 }
-
-                if (c != '\\') {
-                    templine += c;
-                }
+                templine += line[i];
             }
         }
-
         return templine;
     }
 
-
     void processHeader(string line) {
         int headernum = 0;
-        for (char c : line) {
-            if (c == '#') { headernum++; }
-        }
-        if (headernum > 6) {
-            cout << "Warning - MarkupInterpreter: Too many # Level 6 is maximum allowed! Assuming you meant Level 6;";
-            headernum = 6;
-        }
-
-        line.erase(0, headernum + 1);
-
+        while (line[headernum] == '#') headernum++;
+        line = line.substr(headernum);
+        while (line[0] == ' ') line.erase(0, 1);
         newline = "<h" + to_string(headernum) + ">" + line + "</h" + to_string(headernum) + ">";
     }
 
     void processRemainingMarkdown(string line) {
         newline = "";
-        string linkText = "";
-        string link = "";
-        string title = "";
-        string code = "";
         bool isImage = false;
-        bool isFootnote = false;
-        bool wasTriggered = false;
-        bool isCode = false;
-        int i = 0;
-        bool linkc[3] = { false,false,false };
+        bool isFootnoteRef = false;
+        bool isFootnoteDecl = false;
+        string linkText, link, title, codeContent;
+        int bracketDepth = 0;
 
-        for (char c : line) {
-            i++;
-            switch (c) {
-            case '!':
-                wasTriggered = true;
+        for (size_t i = 0; i < line.size(); i++) {
+            char c = line[i];
+            if (c == '!' && i + 1 < line.size() && line[i + 1] == '[') {
                 isImage = true;
-                break;
-            case '[':
-                wasTriggered = true;
-                linkc[0] = true;
-                break;
-            case ']':
-                linkc[0] = false;
-                if (isFootnote && line[1] != '^') {
-                    newline = newline + "";
-                }
-                break;
-            case '(':
-                linkc[1] = true;
-                break;
+                i++;
+                continue;
+            }
 
-            case '^':
-                isFootnote = true;
-                break;
-            case ')':
-                linkc[1] = false;
-                if (link[link.size() - 1] == ' ') {
-                    link.erase(link.size() - 1);
-                }
-                if (isImage == false && wasTriggered == true && !isFootnote) {
-                    newline = newline + "<a href=\"" + link + "\" title=\"" + title + "\">" + linkText + "</a>";
-                }
-                else if (isImage == true && wasTriggered == true && !isFootnote) {
-                    newline = newline + "<img src=\"" + link + "\" alt=\"" + linkText + "\" title=\"" + title + "\">";
-                }
-                break;
-            case '"':
-                if (linkc[2] == false) {
-                    linkc[2] = true;
-                }
-                else {
-                    linkc[2] = false;
-                }
-                break;
-
-
-            case '`':
-                if (codeblockopen == false) {
-                    isCode = !isCode;
-                    wasTriggered = true;
-                    if (isCode == false && wasTriggered == true) {
-                        newline = newline + "<code>" + code + "</code>";
+            if (c == '[') {
+                if (i + 1 < line.size() && line[i + 1] == '^') {
+                    isFootnoteRef = true;
+                    i++;
+                    linkText.clear();
+                    while (i + 1 < line.size() && line[i + 1] != ']') {
+                        linkText += line[++i];
+                    }
+                    i++;
+                    if (i + 1 < line.size() && line[i + 1] == ':') {
+                        isFootnoteDecl = true;
+                        isFootnoteRef = false;
+                        i++;
+                        footnoteLabel = linkText;
+                        footnoteText.clear();
+                        while (i + 1 < line.size()) footnoteText += line[++i];
+                        break;
+                    }
+                    else {
+                        newline += "<sup id=\"fnref" + linkText + "\"><a href=\"#fn" + linkText + "\">" + linkText + "</a></sup>";
                     }
                 }
-                break;
-
-            default:
-                if (linkc[0] == true) {
-                    linkText += c;
-                }
-                else if (linkc[1] == true && linkc[2] == false) {
-                    link += c;
-                }
-                else if (linkc[2] == true) {
-                    title += c;
-                }
-                else if (isCode == true) {
-                    code += c;
-                }
-                else {
-                    newline = newline + c;
-                }
-
+                continue;
             }
+
+            newline += c;
+        }
+
+        if (isFootnoteDecl) {
+            if (!footnoteOpen) {
+                newline += "<ol id=\"footnotes\">";
+                footnoteOpen = true;
+            }
+            newline += "<li id=\"fn" + footnoteLabel + "\">" + footnoteText + "</li>";
         }
     }
 
@@ -296,194 +239,73 @@ public:
         if (line.empty()) {
             if (paragraph_open) {
                 paragraph_open = false;
-                newline = newline + "</p>";
+                newline = "</p>";
             }
         }
         else {
-            if (paragraph_open == false) {
+            if (!paragraph_open) {
                 paragraph_open = true;
                 newline = "<p>";
             }
-            newline = newline + line;
+            newline += line;
         }
     }
 
     void processUnList(string line) {
-
-
-        if (unordered_list_open == false) {
+        if (!unordered_list_open) {
             newline = "<ul>\n";
             unordered_list_open = true;
         }
-        else {
-            checkCloseList(0, true);
-            checkCloseList(1);
-        }
-        line.erase(0, 2);
-        newline = newline + "<li>" + line;
+        line = line.substr(2);
+        newline += "<li>" + line;
         listitem_open = true;
-    }
-
-    void processUnSublist(string line) {
-
-        if (unordered_sublist_open == false) {
-            newline = newline + "<ul>\n";
-            unordered_sublist_open = true;
-
-        }
-        line.erase(0, 4);
-        newline = newline + "<li>" + line + "</li>";
     }
 
     void processOList(string line) {
-
-        checkCloseList(0, true);
-        if (ordered_list_open == false) {
+        if (!ordered_list_open) {
             newline = "<ol>\n";
             ordered_list_open = true;
-
         }
-        else {
-            checkCloseList(0, true);
-            checkCloseList(1);
-        }
-        line.erase(0, 2);
-        newline = newline + "<li>" + line;
+        line = line.substr(line.find('.') + 2);
+        newline += "<li>" + line;
         listitem_open = true;
-    }
-
-    void processOSublist(string line) {
-        if (ordered_sublist_open == false) {
-            newline = newline + "<ol>\n";
-            ordered_sublist_open = true;
-        }
-        line.erase(0, 5);
-        newline = newline + "<li>" + line + "</li>";
-    }
-    void processBlockquote(string line) {
-        int BCount = 0;
-        bool brakeloop = false;
-        for (char c : line) {
-            switch (c) {
-            case '>':
-                BCount++;
-                break;
-            default:
-                brakeloop = true;
-            }
-            if (brakeloop) {
-                break;
-            }
-        }
-        switch (BCount)
-        {
-        case 0:
-            break;
-        case 1:
-            if (openBlackquote == true) {
-                checkCloseList(0, true);
-            }
-            openBlackquote = true;
-            line.erase(0, 2);
-            newline = "<blockquote>" + line;
-            break;
-
-        case 2:
-            line.erase(0, 3);
-            newline = "<blockquote>" + line + "</blockquote>";
-            break;
-        default:
-            break;
-        }
-
-    }
-
-    void processHorizontalRule() {
-        newline = "<hr>";
-    }
-
-    void processCodeBlock(string line) {
-        if (codeblockopen == false) {
-            codeblockopen = true;
-            newline = "<pre><code>";
-        }
-        else if (codeblockopen == true) {
-            codeblockopen = false;
-            newline = "</code></pre>";
-        }
     }
 
     string processline(string line) {
         newline = "";
-        char infocus = line[0];
-
-        if (isdigit(infocus) && line[1] == '.') {
-            this->processOList(line);
+        if (line.empty()) {
+            checkCloseList(3);
+            return "\n";
         }
-        else switch (infocus) {
-        case '#':
-            this->processHeader(line);
-            this->checkCloseList(3);
-            break;
 
-        case '*':
-            if (line[1] == '*' && line[2] == '*') {
-                processHorizontalRule();
-                break;
-            }
-        case '+':
-        case '-':
-            if (line[1] == ' ') {
-                this->processUnList(line);
-            }
-            else if (line[1] == '-' && line[2] == '-') {
-                this->processHorizontalRule();
-            }
-            break;
-
-        case ' ':
-            if (unordered_list_open == true) {
-                if (line[2] == '-' || line[2] == '+' || line[2] == '*') {
-                    this->processUnSublist(line);
-                }
-            }
-            else if (isdigit(line[3]) && line[4] == '.') {
-                this->processOSublist(line);
-            }
-            break;
-
-        case '[':
-            this->processRemainingMarkdown(line);
-            break;
-
-        case '>':
-            this->processBlockquote(line);
-            break;
-
-        case '~':
-        case '`':
-            if (line[1] == '`' || line[1] == '~') {
-                this->processCodeBlock(line);
-            }
-            break;
-
-
-        case '_':
-            if (line[1] = '_' && line[2] == '_')
-                this->processHorizontalRule();
-            break;
-        case '\\':
-            break;
-
-        default:
-            this->processParagraph(line);
-            this->checkCloseList(3);
-            break;
+        if (line[0] == '#') {
+            processHeader(line);
         }
-        newline = this->TextStyle(newline);
-        this->processRemainingMarkdown(newline);
-        newline = newline + "\n";
-        return newline;
+        else if (isdigit(line[0])) {
+            processOList(line);
+        }
+        else if (line[0] == '*' || line[0] == '+' || line[0] == '-') {
+            if (line.substr(0, 3) == "***") {
+                newline = "<hr>";
+            }
+            else {
+                processUnList(line);
+            }
+        }
+        else if (line[0] == '>') {
+            newline = "<blockquote>" + line.substr(1) + "</blockquote>";
+        }
+        else if (line.substr(0, 3) == "```") {
+            newline = codeblockopen ? "</code></pre>" : "<pre><code>";
+            codeblockopen = !codeblockopen;
+        }
+        else {
+            processParagraph(line);
+        }
+
+        newline = TextStyle(newline);
+        processRemainingMarkdown(newline);
+        return newline + "\n";
     }
 };
 
@@ -491,22 +313,26 @@ int main() {
     string filepath = "C:/test/test.txt";
     string line;
     fstream mfile(filepath);
-    markdownInterpreter i;
-    ErrorCorrector ecc;
-    string tempfile = "";
+    markdownInterpreter interpreter;
+    ErrorCorrector corrector;
+    string output;
 
     if (!mfile.is_open()) {
-        cout << "Error: Could not open file " << filepath << endl;
+        cout << "Error opening file!" << endl;
         return 1;
     }
 
     while (getline(mfile, line)) {
-        tempfile = tempfile + i.processline(line);
+        output += interpreter.processline(line);
     }
-    tempfile = i.finalCloseList(tempfile);
-    ecc.submitCode(tempfile);
-    tempfile = ecc.checkCode();
-    cout << tempfile;
-    system("pause");
+    output = interpreter.finalCloseList(output);
+    corrector.submitCode(output);
+    output = corrector.checkCode();
+
+    ofstream out("output.html");
+    out << output;
+    out.close();
+
+    cout << "Conversion complete. Output saved to output.html" << endl;
     return 0;
 }
