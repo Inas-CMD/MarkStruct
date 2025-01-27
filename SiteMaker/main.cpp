@@ -1,0 +1,512 @@
+#include <fstream>
+#include <string>
+#include <iostream>
+
+using namespace std;
+
+class ErrorCorrector {
+private:
+    string code = "";
+public:
+    void removeExtraLi(std::string& str) {
+        std::string patternOl = "</ol>\n</li>";
+        std::string patternUl = "</li></ul>\n</li>";
+
+        size_t posOl = 0;
+        while ((posOl = str.find(patternOl, posOl)) != std::string::npos) {
+            str.erase(posOl + 6, 5);
+            posOl += 6;
+        }
+
+        size_t posUl = 0;
+        while ((posUl = str.find(patternUl, posUl)) != std::string::npos) {
+            str.erase(posUl + 11, 5);
+            posUl += 11;
+        }
+    }
+    void submitCode(string programcode) {
+        code = programcode;
+    }
+    string checkCode() {
+        this->removeExtraLi(code);
+
+        return code;
+    }
+};
+
+class markdownInterpreter {
+private:
+    bool unordered_list_open = false;
+    bool ordered_list_open = false;
+    bool unordered_sublist_open = false;
+    bool ordered_sublist_open = false;
+    bool listitem_open = false;
+    bool paragraph_open = false;
+    bool styleopen[2] = { false, false };
+    bool openBlackquote = false;
+    bool codeblockopen = false;
+    bool ignore = false;
+    string newline;
+
+public:
+
+    void checkCloseList(int type, bool lionly = false) {
+        if (openBlackquote == true) {
+            newline = "</blockquote>\n" + newline;
+            openBlackquote = false;
+        }
+        if (listitem_open == true) {
+            newline = "</li>\n" + newline;
+            listitem_open = false;
+        }
+        if (unordered_sublist_open == true && type != 2 && !lionly) {
+            checkCloseList(0, true);
+            newline = "</ul>\n" + newline;
+            unordered_sublist_open = false;
+        }
+        if (ordered_sublist_open == true && type != 2 && !lionly) {
+            checkCloseList(0, true);
+            newline = "</ol>\n" + newline;
+            ordered_sublist_open = false;
+        }
+        if (unordered_list_open == true && type != 1 && !lionly) {
+
+            newline = "</li></ul>\n" + newline;
+            unordered_list_open = false;
+            listitem_open = false;
+        }
+        if (ordered_list_open == true && type != 1 && !lionly) {
+
+            listitem_open = false;
+            newline = "</li></ol>\n" + newline;
+            ordered_list_open = false;
+        }
+    }
+
+    string finalCloseList(string finaltext, int type = 3) {
+        if (paragraph_open) {
+            paragraph_open = false;
+            finaltext += "</p>";
+        }
+        if (unordered_sublist_open == true && type != 2) {
+            checkCloseList(0, true);
+            finaltext += "</ul>\n";
+            unordered_sublist_open = false;
+        }
+        if (ordered_sublist_open == true && type != 2) {
+            checkCloseList(0, true);
+            finaltext += "</ol>\n";
+            ordered_list_open = false;
+        }
+        if (unordered_list_open == true && type != 1) {
+
+            newline = "</li></ul>\n" + newline;
+            unordered_list_open = false;
+            listitem_open = false;
+        }
+        if (ordered_list_open == true && type != 1) {
+
+            listitem_open = false;
+            newline = "</li></ol>\n" + newline;
+            ordered_list_open = false;
+        }
+        return finaltext;
+    }
+
+    string TextStyle(string line) {
+
+        bool isActive = false;
+        string templine = "";
+        int stylenum = 0;
+        int counter = 0;
+
+        for (char c : line) {
+            if (c == '\\') {
+                ignore = true;
+                counter = 1;
+            }
+
+            if (c == '*') {
+                if (!ignore) {
+                    stylenum++;
+                }
+                else {
+                    if (counter <= 0) {
+                        ignore = false;
+                    }
+                    else {
+                        counter--;
+                    }
+                    templine = templine + c;
+                }
+            }
+            else {
+                if (stylenum > 0) {
+                    if (stylenum == 1) {
+                        if (!styleopen[0]) {
+                            templine += "<em>";
+                            styleopen[0] = true;
+                        }
+                        else {
+                            templine += "</em>";
+                            styleopen[0] = false;
+                        }
+                    }
+                    else if (stylenum == 2) {
+                        if (!styleopen[1]) {
+                            templine += "<strong>";
+                            styleopen[1] = true;
+                        }
+                        else {
+                            templine += "</strong>";
+                            styleopen[1] = false;
+                        }
+                    }
+                    else if (stylenum == 3) {
+                        if (!styleopen[1] && !styleopen[0]) {
+                            templine += "<strong><em>";
+                            styleopen[0] = true;
+                            styleopen[1] = true;
+                        }
+                        else if (styleopen[0] && styleopen[1]) {
+                            templine += "</em></strong>";
+                            styleopen[0] = false;
+                            styleopen[1] = false;
+                        }
+                    }
+                    stylenum = 0;
+                }
+
+                if (c != '\\') {
+                    templine += c;
+                }
+            }
+        }
+
+        return templine;
+    }
+
+
+    void processHeader(string line) {
+        int headernum = 0;
+        for (char c : line) {
+            if (c == '#') { headernum++; }
+        }
+        if (headernum > 6) {
+            cout << "Warning - MarkupInterpreter: Too many # Level 6 is maximum allowed! Assuming you meant Level 6;";
+            headernum = 6;
+        }
+
+        line.erase(0, headernum + 1);
+
+        newline = "<h" + to_string(headernum) + ">" + line + "</h" + to_string(headernum) + ">";
+    }
+
+    void processRemainingMarkdown(string line) {
+        newline = "";
+        string linkText = "";
+        string link = "";
+        string title = "";
+        string code = "";
+        bool isImage = false;
+        bool isFootnote = false;
+        bool wasTriggered = false;
+        bool isCode = false;
+        int i = 0;
+        bool linkc[3] = { false,false,false };
+
+        for (char c : line) {
+            i++;
+            switch (c) {
+            case '!':
+                wasTriggered = true;
+                isImage = true;
+                break;
+            case '[':
+                wasTriggered = true;
+                linkc[0] = true;
+                break;
+            case ']':
+                linkc[0] = false;
+                if (isFootnote && line[1] != '^') {
+                    newline = newline + "";
+                }
+                break;
+            case '(':
+                linkc[1] = true;
+                break;
+
+            case '^':
+                isFootnote = true;
+                break;
+            case ')':
+                linkc[1] = false;
+                if (link[link.size() - 1] == ' ') {
+                    link.erase(link.size() - 1);
+                }
+                if (isImage == false && wasTriggered == true && !isFootnote) {
+                    newline = newline + "<a href=\"" + link + "\" title=\"" + title + "\">" + linkText + "</a>";
+                }
+                else if (isImage == true && wasTriggered == true && !isFootnote) {
+                    newline = newline + "<img src=\"" + link + "\" alt=\"" + linkText + "\" title=\"" + title + "\">";
+                }
+                break;
+            case '"':
+                if (linkc[2] == false) {
+                    linkc[2] = true;
+                }
+                else {
+                    linkc[2] = false;
+                }
+                break;
+
+
+            case '`':
+                if (codeblockopen == false) {
+                    isCode = !isCode;
+                    wasTriggered = true;
+                    if (isCode == false && wasTriggered == true) {
+                        newline = newline + "<code>" + code + "</code>";
+                    }
+                }
+                break;
+
+            default:
+                if (linkc[0] == true) {
+                    linkText += c;
+                }
+                else if (linkc[1] == true && linkc[2] == false) {
+                    link += c;
+                }
+                else if (linkc[2] == true) {
+                    title += c;
+                }
+                else if (isCode == true) {
+                    code += c;
+                }
+                else {
+                    newline = newline + c;
+                }
+
+            }
+        }
+    }
+
+    void processParagraph(string line) {
+        if (line.empty()) {
+            if (paragraph_open) {
+                paragraph_open = false;
+                newline = newline + "</p>";
+            }
+        }
+        else {
+            if (paragraph_open == false) {
+                paragraph_open = true;
+                newline = "<p>";
+            }
+            newline = newline + line;
+        }
+    }
+
+    void processUnList(string line) {
+
+
+        if (unordered_list_open == false) {
+            newline = "<ul>\n";
+            unordered_list_open = true;
+        }
+        else {
+            checkCloseList(0, true);
+            checkCloseList(1);
+        }
+        line.erase(0, 2);
+        newline = newline + "<li>" + line;
+        listitem_open = true;
+    }
+
+    void processUnSublist(string line) {
+
+        if (unordered_sublist_open == false) {
+            newline = newline + "<ul>\n";
+            unordered_sublist_open = true;
+
+        }
+        line.erase(0, 4);
+        newline = newline + "<li>" + line + "</li>";
+    }
+
+    void processOList(string line) {
+
+        checkCloseList(0, true);
+        if (ordered_list_open == false) {
+            newline = "<ol>\n";
+            ordered_list_open = true;
+
+        }
+        else {
+            checkCloseList(0, true);
+            checkCloseList(1);
+        }
+        line.erase(0, 2);
+        newline = newline + "<li>" + line;
+        listitem_open = true;
+    }
+
+    void processOSublist(string line) {
+        if (ordered_sublist_open == false) {
+            newline = newline + "<ol>\n";
+            ordered_sublist_open = true;
+        }
+        line.erase(0, 5);
+        newline = newline + "<li>" + line + "</li>";
+    }
+    void processBlockquote(string line) {
+        int BCount = 0;
+        bool brakeloop = false;
+        for (char c : line) {
+            switch (c) {
+            case '>':
+                BCount++;
+                break;
+            default:
+                brakeloop = true;
+            }
+            if (brakeloop) {
+                break;
+            }
+        }
+        switch (BCount)
+        {
+        case 0:
+            break;
+        case 1:
+            if (openBlackquote == true) {
+                checkCloseList(0, true);
+            }
+            openBlackquote = true;
+            line.erase(0, 2);
+            newline = "<blockquote>" + line;
+            break;
+
+        case 2:
+            line.erase(0, 3);
+            newline = "<blockquote>" + line + "</blockquote>";
+            break;
+        default:
+            break;
+        }
+
+    }
+
+    void processHorizontalRule() {
+        newline = "<hr>";
+    }
+
+    void processCodeBlock(string line) {
+        if (codeblockopen == false) {
+            codeblockopen = true;
+            newline = "<pre><code>";
+        }
+        else if (codeblockopen == true) {
+            codeblockopen = false;
+            newline = "</code></pre>";
+        }
+    }
+
+    string processline(string line) {
+        newline = "";
+        char infocus = line[0];
+
+        if (isdigit(infocus) && line[1] == '.') {
+            this->processOList(line);
+        }
+        else switch (infocus) {
+        case '#':
+            this->processHeader(line);
+            this->checkCloseList(3);
+            break;
+
+        case '*':
+            if (line[1] == '*' && line[2] == '*') {
+                processHorizontalRule();
+                break;
+            }
+        case '+':
+        case '-':
+            if (line[1] == ' ') {
+                this->processUnList(line);
+            }
+            else if (line[1] == '-' && line[2] == '-') {
+                this->processHorizontalRule();
+            }
+            break;
+
+        case ' ':
+            if (unordered_list_open == true) {
+                if (line[2] == '-' || line[2] == '+' || line[2] == '*') {
+                    this->processUnSublist(line);
+                }
+            }
+            else if (isdigit(line[3]) && line[4] == '.') {
+                this->processOSublist(line);
+            }
+            break;
+
+        case '[':
+            this->processRemainingMarkdown(line);
+            break;
+
+        case '>':
+            this->processBlockquote(line);
+            break;
+
+        case '~':
+        case '`':
+            if (line[1] == '`' || line[1] == '~') {
+                this->processCodeBlock(line);
+            }
+            break;
+
+
+        case '_':
+            if (line[1] = '_' && line[2] == '_')
+                this->processHorizontalRule();
+            break;
+        case '\\':
+            break;
+
+        default:
+            this->processParagraph(line);
+            this->checkCloseList(3);
+            break;
+        }
+        newline = this->TextStyle(newline);
+        this->processRemainingMarkdown(newline);
+        newline = newline + "\n";
+        return newline;
+    }
+};
+
+int main() {
+    string filepath = "C:/test/test.txt";
+    string line;
+    fstream mfile(filepath);
+    markdownInterpreter i;
+    ErrorCorrector ecc;
+    string tempfile = "";
+
+    if (!mfile.is_open()) {
+        cout << "Error: Could not open file " << filepath << endl;
+        return 1;
+    }
+
+    while (getline(mfile, line)) {
+        tempfile = tempfile + i.processline(line);
+    }
+    tempfile = i.finalCloseList(tempfile);
+    ecc.submitCode(tempfile);
+    tempfile = ecc.checkCode();
+    cout << tempfile;
+    system("pause");
+    return 0;
+}
