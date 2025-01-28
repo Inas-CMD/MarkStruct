@@ -2,8 +2,121 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <algorithm>
+//#include <cctype>
 
 using namespace std;
+
+class TableConstructor {
+private:
+    vector<vector<string>> Thead;
+    vector<vector<string>> Tbody;
+    bool headHasEnded = false;
+    bool TableConstructionInProgress = false;
+
+    string trim(const string& s) {
+        auto start = s.begin();
+        while (start != s.end() && isspace(*start)) {
+            start++;
+        }
+        auto end = s.end();
+        while (end != start && isspace(*(end - 1))) {
+            end--;
+        }
+        return string(start, end);
+    }
+
+    bool isAllDashes(const string& str) {
+        for (char c : str) {
+            if (c != '-') {
+                return false;
+            }
+        }
+        return !str.empty();
+    }
+
+public:
+    bool fillTable(string line) {
+        vector<string> tempvec;
+        size_t start = 0;
+        size_t end = line.find('|');
+
+        while (end != string::npos) {
+            string cell = line.substr(start, end - start);
+            tempvec.push_back(trim(cell));
+            start = end + 1;
+            end = line.find('|', start);
+        }
+        tempvec.push_back(trim(line.substr(start)));
+
+        // Remove leading/trailing empty cells from pipes at start/end
+        if (!tempvec.empty() && tempvec.front().empty()) {
+            tempvec.erase(tempvec.begin());
+        }
+        if (!tempvec.empty() && tempvec.back().empty()) {
+            tempvec.pop_back();
+        }
+
+        // Check if separator line (all dashes)
+        bool isSeparator = true;
+        for (string& cell : tempvec) {
+            if (!isAllDashes(cell)) {
+                isSeparator = false;
+                break;
+            }
+        }
+
+        if (isSeparator) {
+            if (!headHasEnded) {
+                headHasEnded = true;
+            }
+            return TableConstructionInProgress;
+        }
+
+        // Add to appropriate section
+        if (headHasEnded) {
+            Tbody.push_back(tempvec);
+        }
+        else {
+            Thead.push_back(tempvec);
+        }
+
+        TableConstructionInProgress = true;
+        return TableConstructionInProgress;
+    }
+
+    void endTableFill() {
+        TableConstructionInProgress = false;
+    }
+
+    string ConstructTable() {
+        string html = "<table>\n";
+        if (!Thead.empty()) {
+            html += "  <thead>\n";
+            for (auto& row : Thead) {
+                html += "    <tr>\n";
+                for (auto& cell : row) {
+                    html += "      <th>" + cell + "</th>\n";
+                }
+                html += "    </tr>\n";
+            }
+            html += "  </thead>\n";
+        }
+        if (!Tbody.empty()) {
+            html += "  <tbody>\n";
+            for (auto& row : Tbody) {
+                html += "    <tr>\n";
+                for (auto& cell : row) {
+                    html += "      <td>" + cell + "</td>\n";
+                }
+                html += "    </tr>\n";
+            }
+            html += "  </tbody>\n";
+        }
+        html += "</table>\n";
+        return html;
+    }
+};
 
 class ErrorCorrector {
 private:
@@ -46,7 +159,10 @@ private:
     bool openBlackquote = false;
     bool codeblockopen = false;
     bool ignore = false;
+    bool TableinProgress = false;
+    bool hasTableConstructed = false;
     string newline;
+    TableConstructor tc;
 
     vector<pair<string, string>> footnotes;
 
@@ -425,17 +541,20 @@ public:
         else {
             switch (infocus) {
             case '#':
+                TableinProgress = false;
                 this->processHeader(line);
                 this->checkCloseList(3);
                 break;
 
             case '*':
+                TableinProgress = false;
                 if (line[1] == '*' && line[2] == '*') {
                     processHorizontalRule();
                     break;
                 }
             case '+':
             case '-':
+                TableinProgress = false;
                 if (line[1] == ' ') {
                     this->processUnList(line);
                 }
@@ -445,6 +564,7 @@ public:
                 break;
 
             case ' ':
+                TableinProgress = false;
                 if (unordered_list_open == true) {
                     if (line[2] == '-' || line[2] == '+' || line[2] == '*') {
                         this->processUnSublist(line);
@@ -456,15 +576,18 @@ public:
                 break;
 
             case '[':
+                TableinProgress = false;
                 this->processRemainingMarkdown(line);
                 break;
 
             case '>':
+                TableinProgress = false;
                 this->processBlockquote(line);
                 break;
 
             case '~':
             case '`':
+                TableinProgress = false;
                 if (line[1] == '`' || line[1] == '~') {
                     this->processCodeBlock(line);
                 }
@@ -476,16 +599,28 @@ public:
                 break;
             case '\\':
                 break;
+            
+            case '|':
+                hasTableConstructed = true;
+                TableinProgress = tc.fillTable(line);
+                break;
 
             default:
+                TableinProgress = false;
                 this->processParagraph(line);
                 this->checkCloseList(3);
                 break;
             }
         }
-        newline = this->TextStyle(newline);
-        this->processRemainingMarkdown(newline);
-        newline = newline + "\n";
+        if (TableinProgress == false) {
+            if (hasTableConstructed == true) {
+                newline += tc.ConstructTable();
+                hasTableConstructed = false;
+            }
+            newline = this->TextStyle(newline);
+            this->processRemainingMarkdown(newline);
+            newline = newline + "\n";
+        }
         return newline;
     }
 };
