@@ -6,6 +6,255 @@
 
 using namespace std;
 
+class Styler {
+private:
+    // Light Theme
+    string lightTheme = R"(
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  color: #333;
+  font-family: 'Arial', sans-serif;
+  transition: background 0.3s ease;
+}
+
+a {
+  color: #1e90ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  color: #333;
+  font-family: 'Arial', sans-serif;
+}
+
+input {
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  color: #333;
+}
+)";
+
+    // Dark Theme
+    string darkTheme = R"(
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #121212;
+  color: #e0e0e0;
+  font-family: 'Arial', sans-serif;
+  transition: background 0.3s ease;
+}
+
+a {
+  color: #bb86fc;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: #333333;
+  border: 1px solid #444444;
+  color: #e0e0e0;
+  font-family: 'Arial', sans-serif;
+}
+
+input {
+  background: #333333;
+  border: 1px solid #444444;
+  color: #e0e0e0;
+}
+)";
+
+    // Seaside Theme
+    string seasideTheme = R"(
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: url('https://scontent-vie1-1.xx.fbcdn.net/v/t39.30808-6/311667397_454111373484989_9219682886027814393_n.jpg?_nc_cat=102&ccb=1-7&_nc_sid=cc71e4&_nc_eui2=AeFzGFcgDAPeXwFM9EAKjIjxqw2f2F3dZV-rDZ_YXd1lX0c4n5iCNRN_siywLJ4eyiX2RfaIp_zHqhKIOuzujIN5&_nc_ohc=ty1whWJLuTMQ7kNvgErqvp0&_nc_zt=23&_nc_ht=scontent-vie1-1.xx&_nc_gid=AkNOw2iFc9fugXY1UcMQmML&oh=00_AYB2526NVStxMy85ori0dH-FVT-lzKgF2jIxFxcMH74EHw&oe=679EA55F') no-repeat center center fixed;
+  background-size: cover;
+  color: #ffffff;
+  font-family: 'Arial', sans-serif;
+  transition: background 0.5s ease-in-out;
+}
+
+a {
+  color: #00bcd4;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: rgba(0, 188, 212, 0.7);
+  border: 1px solid #00bcd4;
+  color: #ffffff;
+  font-family: 'Arial', sans-serif;
+}
+
+input {
+  background: rgba(0, 188, 212, 0.7);
+  border: 1px solid #00bcd4;
+  color: #ffffff;
+}
+)";
+
+    // Green-Coder Theme
+    string greenCoderTheme = R"(
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #2e8b57;
+  color: #f4f4f4;
+  font-family: 'Courier New', Courier, monospace;
+  transition: background 0.3s ease;
+}
+
+a {
+  color: #ff6347;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: #3b9a4f;
+  border: 1px solid #336b3b;
+  color: #f4f4f4;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+input {
+  background: #3b9a4f;
+  border: 1px solid #336b3b;
+  color: #f4f4f4;
+}
+)";
+
+    // Purple Theme
+    string purpleTheme = R"(
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: linear-gradient(135deg, #6a0dad, #9b30b6);
+  color: #fff;
+  font-family: 'Arial', sans-serif;
+  animation: pulse 3s infinite;
+}
+
+a {
+  color: #f0f0f0;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background: #6a0dad;
+  border: 1px solid #9b30b6;
+  color: #fff;
+  font-family: 'Arial', sans-serif;
+}
+
+input {
+  background: #6a0dad;
+  border: 1px solid #9b30b6;
+  color: #fff;
+}
+
+@keyframes pulse {
+  0% {
+    background-color: #6a0dad;
+  }
+  50% {
+    background-color: #9b30b6;
+  }
+  100% {
+    background-color: #6a0dad;
+  }
+}
+)";
+
+public:
+    string ThemeSelector(int themenum) {
+        switch (themenum)
+        {
+        case 1:
+            return lightTheme;
+        case 2:
+            return darkTheme;
+        case 3:
+            return seasideTheme;
+        case 4:
+            return greenCoderTheme;
+        case 5:
+            return purpleTheme;
+        default:
+            break;
+        }
+    }
+
+};
+
+class HTMLBuilder {
+private:
+    Styler st;
+
+public:
+    string ConstructSite(string code,string script , int style) {
+        string html = R"(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Site</title>
+    <style>)" + st.ThemeSelector(style) + R"(</style>
+            < / head >
+            < body>"
+)" + code + "<script>" + script + "</script>\n</head>\n<body>" + code + "</body>\n</html>";
+        return html;
+
+    
+};
+
 class TableConstructor {
 private:
     vector<vector<string>> Thead;
