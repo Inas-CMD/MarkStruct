@@ -3,7 +3,6 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-//#include <cctype>
 
 using namespace std;
 
@@ -49,7 +48,6 @@ public:
         }
         tempvec.push_back(trim(line.substr(start)));
 
-        // Remove leading/trailing empty cells from pipes at start/end
         if (!tempvec.empty() && tempvec.front().empty()) {
             tempvec.erase(tempvec.begin());
         }
@@ -57,7 +55,6 @@ public:
             tempvec.pop_back();
         }
 
-        // Check if separator line (all dashes)
         bool isSeparator = true;
         for (string& cell : tempvec) {
             if (!isAllDashes(cell)) {
@@ -73,7 +70,6 @@ public:
             return TableConstructionInProgress;
         }
 
-        // Add to appropriate section
         if (headHasEnded) {
             Tbody.push_back(tempvec);
         }
