@@ -237,7 +237,7 @@ private:
     Styler st;
 
 public:
-    string ConstructSite(string code,string script , int style) {
+    string ConstructSite(string code, string script, int style) {
         string html = R"(
 <!DOCTYPE html>
 <html lang="en">
@@ -251,8 +251,22 @@ public:
             < body>"
 )" + code + "<script>" + script + "</script>\n</head>\n<body>" + code + "</body>\n</html>";
         return html;
+    }
+        void MakeFile(const std::string& filename, const std::string& htmlCode) {
+            std::ofstream htmlFile(filename);
 
-    
+            if (!htmlFile) {
+                std::cerr << "Error: Could not create file: " << filename << std::endl;
+                return;
+            }
+
+            htmlFile << htmlCode;
+
+
+            htmlFile.close();
+
+            std::cout << "HTML file created successfully: " << filename << std::endl;
+        }
 };
 
 class TableConstructor {
@@ -876,6 +890,7 @@ int main() {
     ifstream mfile(filepath);
     markdownInterpreter i;
     ErrorCorrector ecc;
+    HTMLBuilder hb;
     string tempfile = "";
 
     if (!mfile.is_open()) {
@@ -889,7 +904,9 @@ int main() {
     tempfile = i.finalCloseList(tempfile);
     ecc.submitCode(tempfile);
     tempfile = ecc.checkCode();
-    cout << tempfile;
+    tempfile = hb.ConstructSite(tempfile, "", 3);
+    hb.MakeFile("index.html", tempfile);
+    
     system("pause");
     return 0;
 }
