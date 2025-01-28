@@ -8,7 +8,6 @@ using namespace std;
 
 class Styler {
 private:
-    // Light Theme
     string lightTheme = R"(
 * {
   margin: 0;
@@ -46,7 +45,6 @@ input {
 }
 )";
 
-    // Dark Theme
     string darkTheme = R"(
 * {
   margin: 0;
@@ -123,7 +121,6 @@ input {
 }
 )";
 
-    // Green-Coder Theme
     string greenCoderTheme = R"(
 * {
   margin: 0;
@@ -904,7 +901,7 @@ int main() {
     tempfile = i.finalCloseList(tempfile);
     ecc.submitCode(tempfile);
     tempfile = ecc.checkCode();
-    tempfile = hb.ConstructSite(tempfile, "", 3);
+    tempfile = hb.ConstructSite(tempfile, "", 1);
     hb.MakeFile("index.html", tempfile);
     
     system("pause");
